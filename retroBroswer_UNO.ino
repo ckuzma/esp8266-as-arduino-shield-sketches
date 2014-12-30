@@ -10,6 +10,7 @@
      the module seems to have changed between firmware revisions
     
   Notes:
+    -Despite all the changes I've made, this still doesn't work well
     -Requires an ESP8266 running v0.9.2.2 firmware @ 9600 baud
     -ESP 8266 is connected on pins 11 and 12 (RX and TX), with CH-PD
      on VCC (3.3v). GPIOs left untouched (tested model ESP-01)
@@ -19,6 +20,8 @@
      establishes a TCP connection to a server, then requests
      the HTML of a desired page. Modify the SSID and PASS parameters
      below. (Changing the DEST_HOST and DEST_IP should work, too.)
+
+
 */
 
 #include <SoftwareSerial.h>
