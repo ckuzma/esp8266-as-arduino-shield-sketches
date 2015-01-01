@@ -1,22 +1,29 @@
+/*
+Dec 31, 2014 @ 4:47p:
+Updates: Now simplified! Roundtrip command now takes only about 5 seconds to be completed.
+All of the original borrowed code has been rewritten to... um... work. Going to test now.
+
+Happy New Years!
+*/
+
+
 #include <SoftwareSerial.h>
 #define BUFFER_SIZE 512
 #define GET_SIZE 64
-#define PORT  "80"           
-#define dbg Serial
-String bssid = "";
-String wifiPassword = "";
+#define dbg Serial  // USB local debug
+SoftwareSerial esp(11,12);
+String ssid = "";
+String pass = "";
+String serverPort = "80";
 
-char buffer[BUFFER_SIZE];
+char buffer[BUFFER_SIZE]; // Don't touch
 char get_s[GET_SIZE];
-char OKrn[] = "OK\r\n"; 
-String current_lights = "0000";
+char OKrn[] = "OK\r\n"; // Don't touch
+
+String currentCommand = "0000";
 
 
-SoftwareSerial esp(11, 12);
-
-
-
-byte wait_for_esp_response(int timeout, char* term=OKrn) {
+byte waitForEsp(int timeout, char* term=OKrn) {
   unsigned long t=millis();
   bool found=false;
   int i=0;
@@ -38,43 +45,71 @@ byte wait_for_esp_response(int timeout, char* term=OKrn) {
 }
 
 
-
+// ##################
+// ## Setup & Loop ##
+// ##################
 void setup() {
   pinMode(2, OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(4, OUTPUT);
   pinMode(5, OUTPUT);
-  esp.begin(9600); //esp baud rate
-  dbg.begin(9600); //debugger baud rate
-  dbg.println("begin.");
-  setupWiFi(1);
-  dbg.print("device ip addr:");// print device IP address
+  pinMode(6, OUTPUT);
+  pinMode(7, OUTPUT);
+  pinMode(8, OUTPUT);
+  pinMode(9, OUTPUT);
+  pinMode(10,OUTPUT);
+  pinMode(13, OUTPUT); // For debugging purposes w/o USB
+  // Set baud rates
+  digitalWrite(13,HIGH);
+  esp.begin(9600);
+  dbg.begin(9600);
+  dbg.println("DEBUG: Running Setup");
+  // Reset ESP, Test, Configure, Connect, Start Server
+  esp.println("AT+RST"); // Reset
+  waitForEsp(4000);
+  esp.println("AT"); // Test
+  waitForEsp(2000);
+  esp.println("AT+CWMODE=1"); // Set to client mode
+  waitForEsp(2000);
+  esp.println("AT+CWJAP=\""+ssid+"\",\""+pass+"\""); // Join AP
+  waitForEsp(6000);
+  esp.println("AT+CIPMUX=1"); // Allow multiple connections
+  waitForEsp(2000);
+  esp.println("AT+CIPSERVER=1,"+serverPort); // Start server on port
+  waitForEsp(2000);
   esp.println("AT+CIFSR");
-  wait_for_esp_response(1000);
+  waitForEsp(1000);
+  dbg.println("DEBUG: Setup complete\n\n");
+  digitalWrite(13,LOW);
 }
-
 void loop() {
-  updateLights(current_lights);
+  updateLights(currentCommand);
+  // BEGIN - Borrowed Code
   int ch_id, packet_len, lssid = 0, lpass = 0;
   char *pb;  
-  if(read_till_eol()) {
+  if(readTillEnd()) {
     if(strncmp(buffer, "+IPD,", 5)==0) {
       sscanf(buffer+5, "%d,%d", &ch_id, &packet_len);
       if (packet_len > 0) {
         pb = buffer+5;
         while(*pb!=':') pb++;
         pb++;
-        get_data(pb, ch_id);
+        incomingRequest(pb, ch_id);
       }
     }
   }
+  // END - Borrowed Code
 }
+// ##################
+// ## Setup & Loop ##
+// ##################
 
-void get_data(char *pb, int ch_id){
+
+void incomingRequest(char *pb, int ch_id){
   char *pget;
   if (strncmp(pb, "GET /favicon.ico", 16) == 0) {
     pb = pb+6;
-    wait_for_esp_response(1000);
+    waitForEsp(1000);
   }
   if (strncmp(pb, "GET /?", 6) == 0) {
     pb = pb+6;
@@ -84,114 +119,39 @@ void get_data(char *pb, int ch_id){
       pb++; 
       pget++;
     }
-    sort_data();
-    wait_for_esp_response(1000);
-    dbg.println("-> serve homepage\n");
-    serve_homepage(ch_id);
-  }
-  else if (strncmp(pb, "GET /", 5) == 0) {
-    wait_for_esp_response(1000);
-    dbg.println("-> serve homepage\n");
-    serve_homepage(ch_id);
+    extractCommand();
+    waitForEsp(1000);
+    dbg.println("-> serve homepage (Would've!)\n");
+    dbg.println("Command received: "+currentCommand);
+    serveReply(ch_id,currentCommand);
   }
 }
 
-void sort_data(){
-  String _ssid ="";
-  String _pass ="";
+void serveReply(int ch_id,String received){
+  String reply = "{current_command:"+received+"}";
+  esp.println("AT+CIPSEND="+String(ch_id)+","+String(reply.length())); // change 18 to reply length
+  waitForEsp(2000);
+  dbg.println("Sending back a resopnse");
+  esp.println(reply);
+  dbg.println("closing connection");
+  delay(2000); // Not sure if necessary
+  esp.println("AT+CIPCLOSE="+String(ch_id));
+  waitForEsp(2000);
+}
+
+void extractCommand(){
+  String url_command ="";
   char *pget;
   pget = get_s;
-  pget = pget+5;
-  while(*pget!='&'){
-    _ssid += *pget;
+  pget = pget+8; //len("?command")+1
+  while(*pget!='E'){ // Terminating thing on end of string (ex. 010011E)
+    url_command += *pget;
     pget++; 
   }
-  pget = pget+10;
-  while(*pget!=' '){
-    _pass += *pget;
-    pget++; 
-  }
-  wait_for_esp_response(2000);
-  current_lights = _ssid;
-  //setupWiFi(1, _ssid, _pass);
+  waitForEsp(2000);
+  currentCommand = url_command;
 }
-
-
-void serve_homepage(int ch_id) {
-  String header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n";
-  String content="";
-  content += "<h1>Light Controller:</h1><p>";
-  content += "<form method=get>";
-  content += "<label>SSID</label><br>";
-  content += "<input  type='text' name='ssid' maxlength='30' size='15'><br>";
-  content += "<label>Password</label><br>";
-  content += "<input  type='password' name='password' maxlength='30' size='15'><br><br>";
-  content += "<input  type='submit' value='connect' >";
-  content += "</form>";
-  header += "Content-Length:";
-  header += (int)(content.length());
-  header += "\r\n\r\n";
-  esp.print("AT+CIPSEND=");
-  esp.print(ch_id);
-  esp.print(",");
-  esp.println(header.length()+content.length());
- // if(wait_for_esp_response(2000, "> ")) {
-    esp.print(header);
-    esp.print(content);
-  /*
-  } 
-  else {
-    esp.print("AT+CIPCLOSE=");
-    esp.println(ch_id);
-  }
-  */
-}
-
-
-void setupWiFi(int mode) {
-  // try empty AT command
-  esp.println("AT");
-  wait_for_esp_response(1000);
-
-  // set mode 1 (client) or mode 2 (AP)
-  if(mode==1){
-    esp.println("AT+CWMODE=1");
-    wait_for_esp_response(1000);  
-  }
-  else if(mode==2){
-    esp.println("AT+CWMODE=2");
-    wait_for_esp_response(1000);  
-  }
-
-  // reset WiFi module
-  esp.print("AT+RST\r\n");
-  wait_for_esp_response(1500);
-  wait_for_esp_response(3000);
-
-  if(mode==1){
-    // join AP
-    esp.print("AT+CWJAP=\"");
-    esp.print(bssid);
-    esp.print("\",\"");
-    esp.print(wifiPassword);
-    esp.println("\"");
-    delay(5000);
-    // this may take a while, so wait for 5 seconds
-    wait_for_esp_response(5000);
-  }
-  // start server
-  esp.println("AT+CIPMUX=1");
-  wait_for_esp_response(1000);
-
-  esp.print("AT+CIPSERVER=1,"); // turn on TCP service
-  esp.println(PORT);
-  wait_for_esp_response(1000);
-
-}
-
-
-
-bool read_till_eol() {
+bool readTillEnd() {
   static int i=0;
   if(esp.available()) {
     buffer[i++]=esp.read();
@@ -205,7 +165,6 @@ bool read_till_eol() {
   }
   return false;
 }
-
 
 void updateLights(String inbound){
   for(int x = 0; x < inbound.length(); x++){
