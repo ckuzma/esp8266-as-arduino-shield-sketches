@@ -2,8 +2,31 @@
 Dec 31, 2014 @ 4:47p:
 Updates: Now simplified! Roundtrip command now takes only about 5 seconds to be completed.
 All of the original borrowed code has been rewritten to... um... work. Going to test now.
-
 Happy New Years!
+
+Jan 5, 2015 @ 9:15p:
+Seems to work just fine.
+
+------
+
+Wiring Setup (Arduino UNO):
+- Pins 11 and 12 to ESP8266 (running at baudrate of 9600) connected via SoftwareSerial
+- 3.3v and GND to ESP8266 (DO NOT USE 5v!!!!!)
+- Pins 2-10 are setup to be toggled high/low (e.g. relay switches, LEDs, etc.)
+- Pins 0 and 1 are left untouched for USB/Serial debugging (will print out its IP address here)
+- Pin 13 is being used for the onboard LED for basic status information (to be updated later)
+
+How To Use:
+- Fill in the Strings below to set your WiFi network details for connection
+- Load onto Arduino
+- Remove all power from Arduino to properly reset ESP8266
+- Return power to Arduino, wait for the LED on pin 13 to illuminate in a solid manner
+- Send HTTP requests to the IP address of your Arduino as follows:
+  - http://x.x.x.x/?command=0000E
+  - Translation: set the first four pins (2-5) to LOW
+  - Maximum command length: 9 (e.g. 001100110)
+- If using a browser or cURL request, the data returned will be a JSON object reporting
+  the current HIGH/LOW status of all 9 controllable pins
 */
 
 
@@ -20,7 +43,7 @@ char buffer[BUFFER_SIZE]; // Don't touch
 char get_s[GET_SIZE];
 char OKrn[] = "OK\r\n"; // Don't touch
 
-String currentCommand = "0000";
+String currentCommand = "000000000";
 
 
 byte waitForEsp(int timeout, char* term=OKrn) {
