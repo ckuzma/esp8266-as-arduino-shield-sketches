@@ -1,4 +1,6 @@
 /*
+CHANGELOG:
+
 Dec 31, 2014 @ 4:47p:
 Updates: Now simplified! Roundtrip command now takes only about 5 seconds to be completed.
 All of the original borrowed code has been rewritten to... um... work. Going to test now.
@@ -6,6 +8,11 @@ Happy New Years!
 
 Jan 5, 2015 @ 9:15p:
 Seems to work just fine.
+
+Jan 9, 2015 @ 4:49p:
+Implemented improvements by Dir (http://www.esp8266.com/memberlist.php?mode=viewprofile&u=4235),
+and modified the setup routine to allow for a slower WiFi handshake when joining an AP. Should
+result in a much less buggy setup.
 
 ------
 
