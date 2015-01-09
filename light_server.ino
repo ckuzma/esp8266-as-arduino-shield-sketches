@@ -153,11 +153,11 @@ void incomingRequest(char *pb, int ch_id){
 void serveReply(int ch_id,String received){
   String reply = "{current_command:"+received+"}";
   esp.println("AT+CIPSEND="+String(ch_id)+","+String(reply.length())); // change 18 to reply length
+  waitForEsp(2000,">");
+  dbg.println("Sending back a response");
+  esp.print(reply);
   waitForEsp(2000);
-  dbg.println("Sending back a resopnse");
-  esp.println(reply);
-  dbg.println("closing connection");
-  delay(2000); // Not sure if necessary
+  dbg.println("Closing connection");
   esp.println("AT+CIPCLOSE="+String(ch_id));
   waitForEsp(2000);
 }
